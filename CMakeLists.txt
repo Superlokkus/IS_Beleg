@@ -4,7 +4,7 @@ project(IS_Beleg)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/modules/")
 
 find_package(OpenSSL REQUIRED)
-include_directories(OPENSSL_INCLUDE_DIR)
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 set(LIBS ${OPENSSL_LIBRARIES})
 
