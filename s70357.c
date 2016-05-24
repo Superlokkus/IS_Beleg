@@ -15,9 +15,9 @@
  * where the encrypted data will be stored.
  * @param cipher_text_len Actual length of encrypted data in cipher_text in bytes
  */
-bool mk_evp_encrypt(const uint8_t *plain_text,
+bool mk_evp_encrypt(const unsigned char *plain_text,
                     const int plain_len,
-                    uint8_t *cipher_text,
+                    unsigned char *cipher_text,
                     int *cipher_text_len,
                     const EVP_CIPHER *cipher,
                     unsigned char *key,
