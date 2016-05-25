@@ -16,7 +16,7 @@
  * @param cipher_text_len Actual length of encrypted data in cipher_text in bytes
  */
 bool mk_evp_encrypt(const unsigned char *plain_text,
-                    const int plain_len,
+                    const int plain_text_len,
                     unsigned char *cipher_text,
                     int *cipher_text_len,
                     const EVP_CIPHER *cipher,
@@ -32,7 +32,7 @@ bool mk_evp_encrypt(const unsigned char *plain_text,
     }
 
     *cipher_text_len = 0;
-    if (!EVP_EncryptUpdate(context, cipher_text, cipher_text_len, plain_text, plain_len)) {
+    if (!EVP_EncryptUpdate(context, cipher_text, cipher_text_len, plain_text, plain_text_len)) {
         EVP_CIPHER_CTX_free(context);
         return false;
     }
@@ -44,6 +44,39 @@ bool mk_evp_encrypt(const unsigned char *plain_text,
     EVP_CIPHER_CTX_free(context);
     return true;
 }
+
+/*! @param plain_text Buffer that must at least be cipher_text_len + cipher_block_size big
+ * */
+bool mk_evp_decrypt(const unsigned char *cipher_text,
+                    const int cipher_text_len,
+                    unsigned char *plain_text,
+                    int *plain_text_len,
+                    const EVP_CIPHER *cipher,
+                    unsigned char *key,
+                    unsigned char *iv) {
+    EVP_CIPHER_CTX *context = EVP_CIPHER_CTX_new();
+    if (!context) {
+        return false;
+    }
+    if (!EVP_DecryptInit_ex(context, cipher, NULL, key, iv)) {
+        EVP_CIPHER_CTX_free(context);
+        return false;
+    }
+
+    *plain_text_len = 0;
+    if (!EVP_DecryptUpdate(context, plain_text, plain_text_len, cipher_text, cipher_text_len)) {
+        EVP_CIPHER_CTX_free(context);
+        return false;
+    }
+    if (!EVP_DecryptFinal_ex(context, plain_text + *plain_text_len, plain_text_len)) {
+        EVP_CIPHER_CTX_free(context);
+        return false;
+    }
+
+    EVP_CIPHER_CTX_free(context);
+    return true;
+}
+
 
 void decrypt(FILE *cipher_text, FILE plain_text, FILE *key, int corrupt_byte_pos, int corrupt_byte_count) {
 
