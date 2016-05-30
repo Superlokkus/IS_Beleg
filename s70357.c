@@ -9,6 +9,11 @@
 #include <stdint.h>
 #include <openssl/evp.h>
 
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 
 /*!
  * @param cipher_text Buffer, at least (plain_len + cipher_block_size - 1) bytes big,
@@ -77,25 +82,65 @@ bool mk_evp_decrypt(const unsigned char *cipher_text,
     return true;
 }
 
+struct file_memory_map_meta {
+    int file_desc;
+    struct stat file_info;
+};
 
-void decrypt(FILE *cipher_text, FILE plain_text, FILE *key, int corrupt_byte_pos, int corrupt_byte_count) {
+void open_source_file_memory_mapped(char *file_path,
+                                    void **file_memory,
+                                    struct file_memory_map_meta *meta) {
+    meta->file_desc = open(file_path, O_RDONLY);
+    if (meta->file_desc == -1) {
+        perror("Can't open source file");
+        exit(EXIT_FAILURE);
+    }
 
+    if (stat(file_path, &meta->file_info) != 0) {
+        perror("Can't get source file infos");
+        exit(EXIT_FAILURE);
+    }
+    void *source_mem = mmap(NULL, meta->file_info.st_size, PROT_READ, MAP_FILE | MAP_PRIVATE, meta->file_desc, 0);
+    if (source_mem == MAP_FAILED) {
+        perror("Mapping source file failed");
+        exit(EXIT_FAILURE);
+    }
+    *file_memory = source_mem;
+}
+
+void close_source_file_memory_mapped(void **file_memory, struct file_memory_map_meta *meta) {
+    munmap(*file_memory, meta->file_info.st_size);
+    close(meta->file_desc);
+}
+
+void decrypt(char *cipher_text_path,
+             char *plain_text_path,
+             char *key_iv,
+             int corrupt_byte_pos,
+             char *cipher) {
+    void *cipher_text_mem;
+    struct file_memory_map_meta cipher_text_meta;
+    open_source_file_memory_mapped(cipher_text_path, &cipher_text_mem, &cipher_text_meta);
+
+    close_source_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("Usage %s -<MODE>\n", argv[0]);
-        printf("\t<MODE>: d Decrypt aka Aufgabe 1\n");
-        return EXIT_FAILURE;
+    int flag;
+    while ((flag = getopt(argc, argv, "deh i:o:c:k:")) != -1) {
+        switch (flag) {
+            case 'd':
+                printf("Decrypt");
+                break;
+            default:
+                printf("Usage %s -<MODE>\n", argv[0]);
+                printf("\t<MODE>: d Decrypt aka Aufgabe 1: <in_file_path> <out_file_path> <key_iv_path>\n");
+                printf("\t\t e Encrypt aka Aufgabe 3");
+                printf("")
+                return EXIT_FAILURE;
+                break;
+        }
     }
-    switch (*++argv[1]) {
-        case 'd':
-
-            break;
-        default:
-            break;
-    }
-    //EVP_des_ede_cbc
 
     return EXIT_SUCCESS;
 }
