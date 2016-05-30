@@ -88,12 +88,14 @@ struct file_memory_map_meta {
     struct stat file_info;
 };
 
-void open_source_file_memory_mapped(char *file_path,
-                                    void **file_memory,
-                                    struct file_memory_map_meta *meta) {
+
+void open_file_memory_mapped_read(char *file_path,
+                                  void **file_memory,
+                                  struct file_memory_map_meta *meta) {
     meta->file_desc = open(file_path, O_RDONLY);
     if (meta->file_desc == -1) {
-        perror("Can't open source file");
+        fprintf(stderr, "Can't open read file %s", file_path);
+        perror(" ");
         exit(EXIT_FAILURE);
     }
 
@@ -103,13 +105,36 @@ void open_source_file_memory_mapped(char *file_path,
     }
     void *source_mem = mmap(NULL, meta->file_info.st_size, PROT_READ, MAP_FILE | MAP_PRIVATE, meta->file_desc, 0);
     if (source_mem == MAP_FAILED) {
-        perror("Mapping source file failed");
+        perror("Mapping read file failed");
         exit(EXIT_FAILURE);
     }
     *file_memory = source_mem;
 }
 
-void close_source_file_memory_mapped(void **file_memory, struct file_memory_map_meta *meta) {
+void open_file_memory_mapped_write(char *file_path,
+                                   void **file_memory,
+                                   struct file_memory_map_meta *meta,
+                                   size_t size) {
+    meta->file_desc = open(file_path, O_TRUNC | O_CREAT | O_RDWR, 744);
+    if (meta->file_desc == -1) {
+        fprintf(stderr, "Can't open write file %s", file_path);
+        perror(" ");
+        exit(EXIT_FAILURE);
+    }
+
+    if (stat(file_path, &meta->file_info) != 0) {
+        perror("Can't get source file infos");
+        exit(EXIT_FAILURE);
+    }
+    void *source_mem = mmap(NULL, size, PROT_WRITE, MAP_FILE | MAP_SHARED, meta->file_desc, 0);
+    if (source_mem == MAP_FAILED) {
+        perror("Mapping write file failed");
+        exit(EXIT_FAILURE);
+    }
+    *file_memory = source_mem;
+}
+
+void close_file_memory_mapped(void **file_memory, struct file_memory_map_meta *meta) {
     munmap(*file_memory, meta->file_info.st_size);
     close(meta->file_desc);
 }
@@ -121,9 +146,29 @@ void decrypt_mode(char *cipher_text_path,
                   char *cipher) {
     void *cipher_text_mem;
     struct file_memory_map_meta cipher_text_meta;
-    open_source_file_memory_mapped(cipher_text_path, &cipher_text_mem, &cipher_text_meta);
+    open_file_memory_mapped_read(cipher_text_path,
+                                 &cipher_text_mem, &cipher_text_meta);
 
-    close_source_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
+    void *plain_text_mem;
+    struct file_memory_map_meta plain_text_meta;
+    open_file_memory_mapped_write(plain_text_path,
+                                  &plain_text_mem, &plain_text_meta, cipher_text_meta.file_info.st_size);
+
+
+    if (chmod(plain_text_path, cipher_text_meta.file_info.st_mode) != 0) {
+        perror("Can't copy file permissions");
+    }
+    if (lseek(plain_text_meta.file_desc, cipher_text_meta.file_info.st_size - 1, SEEK_SET) == -1) {
+        perror("Can't seek to new end of destination file");
+    }
+    unsigned char dummy = 0;
+    if (write(plain_text_meta.file_desc, &dummy, 1) == -1) {
+        perror("Couldn't write dummy byte");
+    }
+
+
+    close_file_memory_mapped(&plain_text_mem, &plain_text_meta);
+    close_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
 }
 
 int main(int argc, char *argv[]) {
@@ -192,6 +237,12 @@ int main(int argc, char *argv[]) {
     switch (mode) {
         case decrypt:
             decrypt_mode(in_path, out_path, key_path, corrupt_byte_pos, cipher);
+            break;
+        case encrypt:
+            //TODO
+            break;
+        case hash:
+            //TODO
             break;
         case none:
         default:
