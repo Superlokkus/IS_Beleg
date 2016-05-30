@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <openssl/evp.h>
 
+#include <errno.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -113,11 +114,11 @@ void close_source_file_memory_mapped(void **file_memory, struct file_memory_map_
     close(meta->file_desc);
 }
 
-void decrypt(char *cipher_text_path,
-             char *plain_text_path,
-             char *key_iv,
-             int corrupt_byte_pos,
-             char *cipher) {
+void decrypt_mode(char *cipher_text_path,
+                  char *plain_text_path,
+                  char *key_iv,
+                  unsigned corrupt_byte_pos,
+                  char *cipher) {
     void *cipher_text_mem;
     struct file_memory_map_meta cipher_text_meta;
     open_source_file_memory_mapped(cipher_text_path, &cipher_text_mem, &cipher_text_meta);
@@ -126,20 +127,77 @@ void decrypt(char *cipher_text_path,
 }
 
 int main(int argc, char *argv[]) {
+    enum mode {
+        none, decrypt, encrypt, hash
+    } mode = none;
+    char in_path[512];
+    memset(in_path, '\0', sizeof(in_path));
+    char out_path[512];
+    memset(out_path, '\0', sizeof(out_path));
+    char key_path[512];
+    memset(key_path, '\0', sizeof(key_path));
+    char cipher[512];
+    memset(cipher, '\0', sizeof(cipher));
+    unsigned corrupt_byte_pos = -1;
+
     int flag;
-    while ((flag = getopt(argc, argv, "deh i:o:c:k:")) != -1) {
+    while ((flag = getopt(argc, argv, "deh i:o:c:k:b:")) != -1) {
         switch (flag) {
+            case 'e':
+                mode = encrypt;
+                break;
             case 'd':
-                printf("Decrypt");
+                mode = decrypt;
+                break;
+            case 'h':
+                mode = hash;
+                break;
+            case 'i':
+                strncpy(in_path, optarg, sizeof(in_path) - 1);
+                break;
+            case 'o':
+                strncpy(out_path, optarg, sizeof(out_path) - 1);
+                break;
+            case 'k':
+                strncpy(key_path, optarg, sizeof(key_path) - 1);
+                break;
+            case 'c':
+                strncpy(cipher, optarg, sizeof(cipher) - 1);
+                break;
+            case 'b':
+                errno = 0;
+                corrupt_byte_pos = strtol(optarg, NULL, 10);
+                if (errno != 0) {
+                    perror("Could not read byte position, assuming key is ok");
+                    corrupt_byte_pos = -1;
+                }
                 break;
             default:
-                printf("Usage %s -<MODE>\n", argv[0]);
-                printf("\t<MODE>: d Decrypt aka Aufgabe 1: <in_file_path> <out_file_path> <key_iv_path>\n");
-                printf("\t\t e Encrypt aka Aufgabe 3");
-                printf("")
+                printf("Usage %s -<MODE> -<PARAMETERS>\n", argv[0]);
+                printf("\t<MODE>:\n");
+                printf("\t\t e Encrypt aka Aufgabe 3\n");
+                printf("\t\t d Decrypt aka Aufgabe 1\n");
+                printf("\t\t h Hash aka Aufgabe 2\n");
+                printf("\t<PARAMETERS>: \n");
+                printf("\t\t i Input file path\n");
+                printf("\t\t o Output file path\n");
+                printf("\t\t k Key/IV file path\n");
+                printf("\t\t c EVP Cipher to be used\n");
+                printf("\t\t b Corrupt byte position, counted from 0\n");
                 return EXIT_FAILURE;
                 break;
         }
+    }
+
+    switch (mode) {
+        case decrypt:
+            decrypt_mode(in_path, out_path, key_path, corrupt_byte_pos, cipher);
+            break;
+        case none:
+        default:
+            fprintf(stderr, "No mode was specified\n");
+            exit(EXIT_FAILURE);
+            break;
     }
 
     return EXIT_SUCCESS;
