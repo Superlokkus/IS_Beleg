@@ -139,6 +139,43 @@ void close_file_memory_mapped(void **file_memory, struct file_memory_map_meta *m
     close(meta->file_desc);
 }
 
+void create_key_iv_from_file(char *key_iv_path, char **key, char **iv, const EVP_CIPHER *cipher) {
+    FILE *f = fopen(key_iv_path, "rb");
+    if (!f) {
+        fprintf(stderr, "Could not open file %s", key_iv_path);
+        perror(" ");
+        exit(EXIT_FAILURE);
+    }
+
+    *key = malloc(EVP_CIPHER_key_length(cipher));
+    if (*key == NULL) {
+        perror("Could not alloc for key");
+        exit(EXIT_FAILURE);
+    }
+
+    if (EVP_CIPHER_iv_length(cipher) != 0) {
+        *iv = malloc(EVP_CIPHER_iv_length(cipher));
+        if (*iv == NULL) {
+            perror("Could not alloc for iv");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        *iv = NULL;
+    }
+    if (fread(*key, 1, EVP_CIPHER_key_length(cipher), f) != EVP_CIPHER_key_length(cipher)) {
+        fprintf(stderr, "Error while reading key\n");
+        exit(EXIT_FAILURE);
+    }
+    if (*iv != NULL) {
+        if (fread(*iv, 1, EVP_CIPHER_iv_length(cipher), f) != EVP_CIPHER_iv_length(cipher)) {
+            fprintf(stderr, "Error while reading iv\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    fclose(f);
+}
+
 void decrypt_mode(char *cipher_text_path,
                   char *plain_text_path,
                   char *key_iv,
@@ -154,7 +191,6 @@ void decrypt_mode(char *cipher_text_path,
     open_file_memory_mapped_write(plain_text_path,
                                   &plain_text_mem, &plain_text_meta, cipher_text_meta.file_info.st_size);
 
-
     if (chmod(plain_text_path, cipher_text_meta.file_info.st_mode) != 0) {
         perror("Can't copy file permissions");
     }
@@ -166,7 +202,20 @@ void decrypt_mode(char *cipher_text_path,
         perror("Couldn't write dummy byte");
     }
 
+    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
+    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
+    EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
+    if (evp_cipher == NULL) {
+        fprintf(stderr, "Cipher %s not found\n", cipher);
+        exit(EXIT_FAILURE);
+    }
+    char *key;
+    char *iv;
+    create_key_iv_from_file(key_iv, &key, &iv, evp_cipher);
 
+
+    free(key);
+    free(iv);
     close_file_memory_mapped(&plain_text_mem, &plain_text_meta);
     close_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
 }
