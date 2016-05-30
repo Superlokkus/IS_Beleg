@@ -139,7 +139,7 @@ void close_file_memory_mapped(void **file_memory, struct file_memory_map_meta *m
     close(meta->file_desc);
 }
 
-void create_key_iv_from_file(char *key_iv_path, char **key, char **iv, const EVP_CIPHER *cipher) {
+void create_key_iv_from_file(char *key_iv_path, unsigned char **key, unsigned char **iv, const EVP_CIPHER *cipher) {
     FILE *f = fopen(key_iv_path, "rb");
     if (!f) {
         fprintf(stderr, "Could not open file %s", key_iv_path);
@@ -209,9 +209,16 @@ void decrypt_mode(char *cipher_text_path,
         fprintf(stderr, "Cipher %s not found\n", cipher);
         exit(EXIT_FAILURE);
     }
-    char *key;
-    char *iv;
+    unsigned char *key;
+    unsigned char *iv;
     create_key_iv_from_file(key_iv, &key, &iv, evp_cipher);
+
+    int plain_len = 0;
+    if (!mk_evp_decrypt(cipher_text_mem, cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
+                        key, iv)) {
+        fprintf(stderr, "mk_evp_decrypt failed\n");
+        exit(EXIT_FAILURE);
+    }
 
 
     free(key);
