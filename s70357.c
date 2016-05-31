@@ -14,7 +14,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <assert.h>
 
 
 /*!
@@ -178,7 +177,7 @@ void create_key_iv_from_file(char *key_iv_path, unsigned char **key, unsigned ch
 }
 
 unsigned char *permutate_key(unsigned char *key, unsigned corrupt_byte_pos) {
-    key[corrupt_byte_pos] = key[corrupt_byte_pos] + 1;
+    key[corrupt_byte_pos] = key[corrupt_byte_pos] + 1; //although in DES, we could reduce to half because of parity bit
 
     return key;
 }
@@ -239,18 +238,10 @@ void decrypt_mode(char *cipher_text_path,
                                          cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
                                          key, iv);
     while (!decrypt_return || !is_pdf(plain_text_mem)) {
-        if (decrypt_return) {
-            fprintf(stderr, "Altough decrypt was ok for");
-            for (int i = 0; i < key_len; ++i)
-                fprintf(stderr, "%x", key[i]);
-            fprintf(stderr, "\n");
-        }
-
         plain_len = 0;
         decrypt_return = mk_evp_decrypt(cipher_text_mem,
                                         cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
                                         permutate_key(key, corrupt_byte_pos), iv);
-
     }
 
 
