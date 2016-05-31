@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <assert.h>
 
 
 /*!
@@ -176,11 +177,33 @@ void create_key_iv_from_file(char *key_iv_path, unsigned char **key, unsigned ch
     fclose(f);
 }
 
+unsigned char *permutate_key(unsigned char *key, unsigned corrupt_byte_pos) {
+    key[corrupt_byte_pos] = key[corrupt_byte_pos] + 1;
+
+    return key;
+}
+
+bool is_pdf(unsigned char *data) {
+    unsigned char pdf_start[] = {"%PDF"};
+    unsigned char pdf_end[] = {"%%EOF"};
+
+    return !memcmp(pdf_start, data, sizeof(pdf_start) - 1); //TODO check pdf_end
+}
+
 void decrypt_mode(char *cipher_text_path,
                   char *plain_text_path,
                   char *key_iv,
                   unsigned corrupt_byte_pos,
                   char *cipher) {
+    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
+    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
+    EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
+    if (evp_cipher == NULL) {
+        fprintf(stderr, "Cipher %s not found\n", cipher);
+        exit(EXIT_FAILURE);
+    }
+
+
     void *cipher_text_mem;
     struct file_memory_map_meta cipher_text_meta;
     open_file_memory_mapped_read(cipher_text_path,
@@ -194,7 +217,8 @@ void decrypt_mode(char *cipher_text_path,
     if (chmod(plain_text_path, cipher_text_meta.file_info.st_mode) != 0) {
         perror("Can't copy file permissions");
     }
-    if (lseek(plain_text_meta.file_desc, cipher_text_meta.file_info.st_size - 1, SEEK_SET) == -1) {
+    if (lseek(plain_text_meta.file_desc, cipher_text_meta.file_info.st_size - 1 + EVP_CIPHER_block_size(evp_cipher),
+              SEEK_SET) == -1) {
         perror("Can't seek to new end of destination file");
     }
     unsigned char dummy = 0;
@@ -202,22 +226,31 @@ void decrypt_mode(char *cipher_text_path,
         perror("Couldn't write dummy byte");
     }
 
-    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
-    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
-    EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
-    if (evp_cipher == NULL) {
-        fprintf(stderr, "Cipher %s not found\n", cipher);
-        exit(EXIT_FAILURE);
-    }
     unsigned char *key;
     unsigned char *iv;
     create_key_iv_from_file(key_iv, &key, &iv, evp_cipher);
 
+
+    //now lets try the keys
+    const unsigned key_len = EVP_CIPHER_key_length(evp_cipher);
     int plain_len = 0;
-    if (!mk_evp_decrypt(cipher_text_mem, cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
-                        key, iv)) {
-        fprintf(stderr, "mk_evp_decrypt failed\n");
-        exit(EXIT_FAILURE);
+
+    bool decrypt_return = mk_evp_decrypt(cipher_text_mem,
+                                         cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
+                                         key, iv);
+    while (!decrypt_return || !is_pdf(plain_text_mem)) {
+        if (decrypt_return) {
+            fprintf(stderr, "Altough decrypt was ok for");
+            for (int i = 0; i < key_len; ++i)
+                fprintf(stderr, "%x", key[i]);
+            fprintf(stderr, "\n");
+        }
+
+        plain_len = 0;
+        decrypt_return = mk_evp_decrypt(cipher_text_mem,
+                                        cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
+                                        permutate_key(key, corrupt_byte_pos), iv);
+
     }
 
 
