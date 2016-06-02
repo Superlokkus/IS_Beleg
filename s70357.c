@@ -324,6 +324,57 @@ void hash_mode(char *text_path,
     close_file_memory_mapped(&text_mem, &text_meta);
 }
 
+void encrypt_mode(char *plain_text_path,
+                  char *cipher_text_path,
+                  char *key_iv,
+                  char *cipher) {
+    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
+    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
+    EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
+    if (evp_cipher == NULL) {
+        fprintf(stderr, "Cipher %s not found\n", cipher);
+        exit(EXIT_FAILURE);
+    }
+
+    void *plain_text_mem;
+    struct file_memory_map_meta plain_text_meta;
+    open_file_memory_mapped_read(plain_text_path,
+                                 &plain_text_mem, &plain_text_meta);
+
+    void *cipher_text_mem;
+    struct file_memory_map_meta cipher_text_meta;
+    open_file_memory_mapped_write(cipher_text_path,
+                                  &cipher_text_mem, &cipher_text_meta, plain_text_meta.file_info.st_size);
+
+    if (chmod(cipher_text_path, plain_text_meta.file_info.st_mode) != 0) {
+        perror("Can't copy file permissions");
+    }
+    if (lseek(cipher_text_meta.file_desc, plain_text_meta.file_info.st_size + EVP_CIPHER_block_size(evp_cipher),
+              SEEK_SET) == -1) {
+        perror("Can't seek to new end of destination file");
+    }
+    unsigned char dummy = 0;
+    if (write(cipher_text_meta.file_desc, &dummy, 1) == -1) {
+        perror("Couldn't write dummy byte");
+    }
+
+    unsigned char *key;
+    unsigned char *iv;
+    create_key_iv_from_file(key_iv, &key, &iv, evp_cipher);
+
+    int cipher_text_len = 0;
+    if (!mk_evp_encrypt(plain_text_mem, plain_text_meta.file_info.st_size, cipher_text_mem, &cipher_text_len,
+                        evp_cipher, key, iv)) {
+        fprintf(stderr, "Encryption went wrong\n");
+        exit(EXIT_FAILURE);
+    }
+
+    free(key);
+    free(iv);
+    close_file_memory_mapped(&plain_text_mem, &plain_text_meta);
+    close_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
+}
+
 int main(int argc, char *argv[]) {
     enum mode {
         none, decrypt, encrypt, hash
@@ -381,7 +432,7 @@ int main(int argc, char *argv[]) {
             decrypt_mode(in_path, out_path, key_path, corrupt_byte_pos, cipher);
             break;
         case encrypt:
-            //TODO
+            encrypt_mode(in_path, out_path, key_path, cipher);
             break;
         case hash:
             hash_mode(in_path, out_path, cipher);
