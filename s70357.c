@@ -88,6 +88,32 @@ struct file_memory_map_meta {
     struct stat file_info;
 };
 
+/*! @param digest Must be big engough to hold at least EVP_MAX_MD_SIZE
+ * */
+bool mk_evp_digest(const unsigned char *text,
+                   const size_t text_len,
+                   unsigned char *digest,
+                   unsigned int *digest_len,
+                   const EVP_MD *digest_type) {
+    EVP_MD_CTX *context = EVP_MD_CTX_create();
+    if (!context) {
+        return false;
+    }
+    if (!EVP_DigestInit_ex(context, digest_type, NULL)) {
+        return false;
+    }
+    if (!EVP_DigestUpdate(context, text, text_len)) {
+        return false;
+    }
+    if (!EVP_DigestFinal_ex(context, digest, digest_len)) {
+        return false;
+    }
+
+    EVP_MD_CTX_destroy(context);
+
+    return true;
+}
+
 
 void open_file_memory_mapped_read(char *file_path,
                                   void **file_memory,
@@ -186,7 +212,7 @@ bool is_pdf(unsigned char *data) {
     unsigned char pdf_start[] = {"%PDF"};
     unsigned char pdf_end[] = {"%%EOF"};
 
-    return !memcmp(pdf_start, data, sizeof(pdf_start) - 1); //TODO check pdf_end
+    return !memcmp(pdf_start, data, sizeof(pdf_start) - 1); //TODO check pdf_end, but cutaway the padding
 }
 
 void decrypt_mode(char *cipher_text_path,
@@ -251,6 +277,26 @@ void decrypt_mode(char *cipher_text_path,
     close_file_memory_mapped(&cipher_text_mem, &cipher_text_meta);
 }
 
+void hash_mode(char *text_path,
+               char *opt_hash_path,
+               char *cipher) {
+    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
+    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
+    EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
+    if (evp_cipher == NULL) {
+        fprintf(stderr, "Cipher %s not found\n", cipher);
+        exit(EXIT_FAILURE);
+    }
+    void *text_mem;
+    struct file_memory_map_meta text_meta;
+    open_file_memory_mapped_read(text_path,
+                                 &text_mem, &text_meta);
+
+    //TODO
+
+    close_file_memory_mapped(&text_mem, &text_meta);
+}
+
 int main(int argc, char *argv[]) {
     enum mode {
         none, decrypt, encrypt, hash
@@ -305,10 +351,10 @@ int main(int argc, char *argv[]) {
                 printf("\t\t h Hash aka Aufgabe 2\n");
                 printf("\t<PARAMETERS>: \n");
                 printf("\t\t i Input file path\n");
-                printf("\t\t o Output file path\n");
-                printf("\t\t k Key/IV file path\n");
+                printf("\t\t o Output file path, optional for hash mode\n");
+                printf("\t\t k Key/IV file path, optional for hash mode\n");
                 printf("\t\t c EVP Cipher to be used\n");
-                printf("\t\t b Corrupt byte position, counted from 0\n");
+                printf("\t\t b Corrupt byte position, counted from 0, optional for hash mode\n");
                 return EXIT_FAILURE;
                 break;
         }
@@ -322,7 +368,7 @@ int main(int argc, char *argv[]) {
             //TODO
             break;
         case hash:
-            //TODO
+            hash_mode(in_path, out_path, cipher);
             break;
         case none:
         default:
