@@ -264,6 +264,12 @@ void decrypt_mode(char *cipher_text_path,
                                          cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
                                          key, iv);
     while (!decrypt_return || !is_pdf(plain_text_mem)) {
+        fprintf(stderr, "Key 0x");
+        for (unsigned i = 0; i < key_len; ++i) {
+            fprintf(stderr, "%02X", key[i]);
+        }
+
+        fprintf(stderr, " didn't catch it trying the next one\n");
         plain_len = 0;
         decrypt_return = mk_evp_decrypt(cipher_text_mem,
                                         cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
@@ -293,6 +299,27 @@ void hash_mode(char *text_path,
                                  &text_mem, &text_meta);
 
 
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned hash_len = 0;
+    mk_evp_digest(text_mem, text_meta.file_info.st_size, hash, &hash_len, digest);
+
+    if (strlen(opt_hash_path) == 0) {
+        for (unsigned i = 0; i < hash_len; ++i) {
+            printf("%02X", hash[i]);
+        }
+        printf("\n");
+    } else {
+        FILE *out_file = fopen(opt_hash_path, "wb");
+        if (!out_file) {
+            perror("Could not open output file");
+            exit(EXIT_FAILURE);
+        }
+        if (fwrite(hash, hash_len, 1, out_file) != 1) {
+            fprintf(stderr, "Could not write the hash correctly\n");
+            exit(EXIT_FAILURE);
+        }
+        fclose(out_file);
+    }
 
     close_file_memory_mapped(&text_mem, &text_meta);
 }
