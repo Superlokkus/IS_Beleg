@@ -279,12 +279,12 @@ void decrypt_mode(char *cipher_text_path,
 
 void hash_mode(char *text_path,
                char *opt_hash_path,
-               char *cipher) {
-    OpenSSL_add_all_algorithms();//Needed for older versions to use EVP_get_cipherbyname
-    const EVP_CIPHER *evp_cipher = EVP_get_cipherbyname(cipher);
+               char *digest_name) {
+    OpenSSL_add_all_digests();//Needed for older versions to use EVP_get_cipherbyname
+    const EVP_MD *digest = EVP_get_digestbyname(digest_name);
     EVP_cleanup(); //cleanup for OpenSSL_add_all_algorithms
-    if (evp_cipher == NULL) {
-        fprintf(stderr, "Cipher %s not found\n", cipher);
+    if (digest == NULL) {
+        fprintf(stderr, "Digest %s not found\n", digest_name);
         exit(EXIT_FAILURE);
     }
     void *text_mem;
@@ -292,7 +292,7 @@ void hash_mode(char *text_path,
     open_file_memory_mapped_read(text_path,
                                  &text_mem, &text_meta);
 
-    //TODO
+
 
     close_file_memory_mapped(&text_mem, &text_meta);
 }
@@ -344,17 +344,6 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             default:
-                printf("Usage %s -<MODE> -<PARAMETERS>\n", argv[0]);
-                printf("\t<MODE>:\n");
-                printf("\t\t e Encrypt aka Aufgabe 3\n");
-                printf("\t\t d Decrypt aka Aufgabe 1\n");
-                printf("\t\t h Hash aka Aufgabe 2\n");
-                printf("\t<PARAMETERS>: \n");
-                printf("\t\t i Input file path\n");
-                printf("\t\t o Output file path, optional for hash mode\n");
-                printf("\t\t k Key/IV file path, optional for hash mode\n");
-                printf("\t\t c EVP Cipher to be used\n");
-                printf("\t\t b Corrupt byte position, counted from 0, optional for hash mode\n");
                 return EXIT_FAILURE;
                 break;
         }
@@ -373,6 +362,17 @@ int main(int argc, char *argv[]) {
         case none:
         default:
             fprintf(stderr, "No mode was specified\n");
+            printf("Usage %s -<MODE> -<PARAMETERS>\n", argv[0]);
+            printf("\t<MODE>:\n");
+            printf("\t\t e Encrypt aka Aufgabe 3\n");
+            printf("\t\t d Decrypt aka Aufgabe 1\n");
+            printf("\t\t h Hash aka Aufgabe 2\n");
+            printf("\t<PARAMETERS>: \n");
+            printf("\t\t i Input file path\n");
+            printf("\t\t o Output file path, optional for hash mode\n");
+            printf("\t\t k Key/IV file path, optional for hash mode\n");
+            printf("\t\t c EVP Cipher/Digest to be used\n");
+            printf("\t\t b Corrupt byte position, counted from 0, optional for hash mode\n");
             exit(EXIT_FAILURE);
             break;
     }
