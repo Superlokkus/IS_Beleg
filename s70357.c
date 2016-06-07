@@ -42,10 +42,12 @@ bool mk_evp_encrypt(const unsigned char *plain_text,
         EVP_CIPHER_CTX_free(context);
         return false;
     }
-    if (!EVP_EncryptFinal_ex(context, cipher_text + *cipher_text_len, cipher_text_len)) {
+    int final_block_len = 0;
+    if (!EVP_EncryptFinal_ex(context, cipher_text + *cipher_text_len, &final_block_len)) {
         EVP_CIPHER_CTX_free(context);
         return false;
     }
+    *cipher_text_len += final_block_len;
 
     EVP_CIPHER_CTX_free(context);
     return true;
@@ -277,7 +279,10 @@ void decrypt_mode(char *cipher_text_path,
                                         cipher_text_meta.file_info.st_size, plain_text_mem, &plain_len, evp_cipher,
                                         permutate_key(key, corrupt_byte_pos), iv);
     }
-
+    if (ftruncate(plain_text_meta.file_desc, plain_len) != 0) {
+        perror("Trimming of final plain text failed");
+        exit(EXIT_FAILURE);
+    }
 
     free(key);
     free(iv);
@@ -371,6 +376,10 @@ void encrypt_mode(char *plain_text_path,
         exit(EXIT_FAILURE);
     }
 
+    if (ftruncate(cipher_text_meta.file_desc, cipher_text_len) != 0) {
+        perror("Trimming of final plain text failed");
+        exit(EXIT_FAILURE);
+    }
     free(key);
     free(iv);
     close_file_memory_mapped(&plain_text_mem, &plain_text_meta);
