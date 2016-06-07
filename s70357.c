@@ -74,10 +74,12 @@ bool mk_evp_decrypt(const unsigned char *cipher_text,
         EVP_CIPHER_CTX_free(context);
         return false;
     }
-    if (!EVP_DecryptFinal_ex(context, plain_text + *plain_text_len, plain_text_len)) {
+    int final_block_size = 0;
+    if (!EVP_DecryptFinal_ex(context, plain_text + *plain_text_len, &final_block_size)) {
         EVP_CIPHER_CTX_free(context);
         return false;
     }
+    *plain_text_len += final_block_size;
 
     EVP_CIPHER_CTX_free(context);
     return true;
