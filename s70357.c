@@ -269,7 +269,7 @@ void decrypt_mode(char *cipher_text_path,
                                          key, iv);
     while (!decrypt_return || !is_pdf(plain_text_mem)) {
         fprintf(stderr, "Key 0x");
-        unsgined i = 0;
+        unsigned i;
         for (i = 0; i < key_len; ++i) {
             fprintf(stderr, "%02X", key[i]);
         }
