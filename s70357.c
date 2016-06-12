@@ -269,7 +269,8 @@ void decrypt_mode(char *cipher_text_path,
                                          key, iv);
     while (!decrypt_return || !is_pdf(plain_text_mem)) {
         fprintf(stderr, "Key 0x");
-        for (unsigned i = 0; i < key_len; ++i) {
+        unsgined i = 0;
+        for (i = 0; i < key_len; ++i) {
             fprintf(stderr, "%02X", key[i]);
         }
 
@@ -311,7 +312,8 @@ void hash_mode(char *text_path,
     mk_evp_digest(text_mem, text_meta.file_info.st_size, hash, &hash_len, digest);
 
     if (strlen(opt_hash_path) == 0) {
-        for (unsigned i = 0; i < hash_len; ++i) {
+        unsigned i;
+        for (i = 0; i < hash_len; ++i) {
             printf("%02X", hash[i]);
         }
         printf("\n");
